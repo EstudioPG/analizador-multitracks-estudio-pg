@@ -1,0 +1,19 @@
+# Archivos temporales
+*.tmp
+*.temp
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Entornos y cachés
+__pycache__/
+.cache/
+
+# Productos generados
+build/
+dist/
+
+# Binarios locales de FFmpeg
+/Recursos/ffmpeg.exe
+/Recursos/ffprobe.exe
