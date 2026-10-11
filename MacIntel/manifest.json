@@ -1,0 +1,28 @@
+{
+  "application": "Analizador de Multitracks Estudio PG",
+  "version": "2.12.19",
+  "platform": "macOS Intel x86_64",
+  "minimum_macos": "10.15",
+  "base_package": {
+    "filename": "Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel).zip",
+    "sha256": "ee7f04167ef2bec5bd2eea15db23d16e109abe133ab32b7c79e2a33774286acf"
+  },
+  "pdf_generator_source": "not available; pinned compiled x86_64 binary",
+  "components": {
+    "01 Cómo abrir.pdf": "fcadcce2163ef8051437e48dfb4ed7ddc2a2be899ee4c66b1707a28e0b9f47de",
+    "02 Qué hace y cómo trabaja.pdf": "f944d18f85262ec648d251b71d109d793e732c6fa97e83f8ac5bd2ee8dfe6010",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Info.plist": "0f54a1bf3fa1d16116a3679dd5abd4c201b987fa562b01d5947b65eb1fdfb009",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/MacOS/AnalizadorMultitracks": "3eb99155d5d8b904b96fa4254528e06687269b5956ace80265c3670e0c3fb72d",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/AnalizadorMultitracksV2.command": "b9536f5001c8f200d43696411d096ebe1291139680fc33c32ad34969e180ab29",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/AppIcon.icns": "fa1dd038f248388ad30c368c21e159e6461c054d00d7a380256a32eb966f0540",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/DejaVuSans-Bold.ttf": "5c1247acef7f2b8522a31742c76d6adcb5569bacc0be7ceaa4dc39dd252ce895",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/DejaVuSans.ttf": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/EffectiveDepth.pl": "ac4402c06fc1d2ad2c033522439096ae04608d78422f95625465d0b34759b320",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/GeneradorPDFMacIntel": "7cc720272d5749a77454d497d45a893ec93ed7284c6039690fb6d28faf01d0b7",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/LICENCIA_FUENTE_DEJAVU.txt": "e180b3d65bf650dffffd71dd21b6180767b469a18dd87e1d8552be69bb9ecdf0",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/Progress.applescript": "84b252b102f09091d5afa42294c8aa83a207f7585c8014ec69a1f95e64e4f94f",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/ffmpeg": "e27de05e3a9f9c758f9766d15d1a069fddeed5f725e35d9ab28683be4740dad7",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/ffprobe": "a1508faa028bfb8e20c9d182c3d41fcff29ee7584ae21b2d6c357472a3ecbc24",
+    "Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app/Contents/Resources/PublishPDFReports.sh": "55d16d01ac8338979d456c555df68c62a6da21aca7e05e097790014184987e6b"
+  }
+}

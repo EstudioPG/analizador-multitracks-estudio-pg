@@ -1,0 +1,8 @@
+# Insumos locales; el ZIP V2.12.18 permanece fuera del repositorio.
+vendor-input/
+
+# Salidas y temporales de generación/revisión.
+dist/
+tmp/
+__pycache__/
+*.py[cod]
