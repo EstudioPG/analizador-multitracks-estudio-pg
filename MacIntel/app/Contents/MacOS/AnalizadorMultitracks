@@ -1,0 +1,154 @@
+#!/bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RESOURCES="$(cd "$SCRIPT_DIR/../Resources" && pwd)"
+
+# ============================================================
+# 1) ELEGIR CARPETA ANTES DE ABRIR LA VENTANA DE PROGRESO
+# ============================================================
+# Esto evita el destello de la ventana de progreso al iniciar la app.
+SOURCE_DIR=$(/usr/bin/osascript <<'APPLESCRIPT'
+try
+    set selectedFolder to choose folder with prompt "Elegí la carpeta de multitracks que querés analizar:"
+    return POSIX path of selectedFolder
+on error number -128
+    return ""
+end try
+APPLESCRIPT
+)
+
+# Si el usuario cancela el selector, la app termina silenciosamente.
+if [ -z "$SOURCE_DIR" ]; then
+    exit 0
+fi
+SOURCE_DIR="${SOURCE_DIR%/}"
+
+UID_NOW="$(/usr/bin/id -u)"
+STATUS_FILE="/tmp/estudiopg_analizador_${UID_NOW}.status"
+CANCEL_FILE="/tmp/estudiopg_analizador_${UID_NOW}.cancel"
+READY_FILE="/tmp/estudiopg_analizador_${UID_NOW}.ready"
+CLOSED_FILE="/tmp/estudiopg_analizador_${UID_NOW}.closed"
+ETA_FILE="/tmp/estudiopg_analizador_${UID_NOW}.eta.tsv"
+
+CACHE_DIR="$HOME/Library/Caches/EstudioPG/AnalizadorMultitracks"
+HELPER_APP="$CACHE_DIR/Analizador de Multitracks Estudio PG Progreso V2.12.19.app"
+
+rm -f "$STATUS_FILE" "$CANCEL_FILE" "$READY_FILE" "$CLOSED_FILE" "$ETA_FILE"
+printf "0\tPreparando análisis\t%s\n" "$(basename "$SOURCE_DIR")" > "$STATUS_FILE"
+
+mkdir -p "$CACHE_DIR"
+rm -rf "$HELPER_APP"
+/usr/bin/osacompile -o "$HELPER_APP" "$RESOURCES/Progress.applescript" >/dev/null 2>&1
+
+if [ -d "$HELPER_APP" ]; then
+    /usr/bin/open -n "$HELPER_APP"
+
+    for N in {1..50}
+    do
+        [ -e "$READY_FILE" ] && break
+        /bin/sleep 0.1
+    done
+fi
+
+export PG_PROGRESS_FILE="$STATUS_FILE"
+export PG_CANCEL_FILE="$CANCEL_FILE"
+export PG_ETA_FILE="$ETA_FILE"
+export PG_SOURCE_DIR="$SOURCE_DIR"
+
+"$RESOURCES/AnalizadorMultitracksV2.command"
+RC=$?
+
+if [ "$RC" -eq 130 ]; then
+    printf "CANCEL\tProceso cancelado\n" > "$STATUS_FILE"
+elif [ "$RC" -ne 0 ]; then
+    printf "ERROR\tEl proceso se interrumpió. Revisá INFORME_ANALISIS_DETALLADO.txt y volvé a intentarlo.\n" > "$STATUS_FILE"
+else
+    if ! /usr/bin/grep -q '^DONE' "$STATUS_FILE" 2>/dev/null; then
+        printf "CANCEL\tProceso cancelado\n" > "$STATUS_FILE"
+    fi
+fi
+
+# Esperar brevemente a que la ventana de progreso se cierre antes de mostrar
+# el resultado final. Así nunca quedan dos ventanas superpuestas ni el botón
+# Stop visible cuando el análisis ya terminó.
+for N in {1..30}
+do
+    [ -e "$CLOSED_FILE" ] && break
+    /bin/sleep 0.1
+done
+
+if [ "$RC" -eq 0 ] && /usr/bin/grep -q '^DONE' "$STATUS_FILE" 2>/dev/null; then
+    IFS=$'\t' read -r TAG PCT PHASE DESTINATION OUTPUT_TYPE WAV_TOTAL CONVERSION_TOTAL PDF_STATUS PDF_ERROR_MSG < "$STATUS_FILE"
+
+    if [ "$OUTPUT_TYPE" = "PROCESADO" ]; then
+        OUTPUT_NAME="$(/usr/bin/basename "$DESTINATION")"
+        /usr/bin/osascript - "$DESTINATION" "$OUTPUT_NAME" "$WAV_TOTAL" "$CONVERSION_TOTAL" "$PDF_STATUS" "$PDF_ERROR_MSG" <<'APPLESCRIPT'
+on run argv
+    set destinationPath to item 1 of argv
+    set outputFolderName to item 2 of argv
+    set wavTotal to item 3 of argv
+    set conversionTotal to item 4 of argv
+    set pdfStatus to item 5 of argv
+    set pdfError to item 6 of argv
+
+    set finalMessage to "Análisis finalizado" & return & return & ¬
+        wavTotal & " WAV analizados" & return & ¬
+        conversionTotal & " conversiones realizadas" & return & return & ¬
+        "Se generó: " & outputFolderName
+
+    if pdfStatus is "ERROR" then
+        set finalMessage to finalMessage & return & return & ¬
+            "No se pudieron generar o publicar los PDF." & return & ¬
+            "Se conservaron los informes básico y detallado en TXT." & return & ¬
+            "Error: " & pdfError
+    end if
+
+    set userChoice to button returned of (display dialog finalMessage ¬
+        with title "Analizador de Multitracks Estudio PG V2.12.19" ¬
+        buttons {"Cerrar", "Abrir carpeta"} ¬
+        default button "Abrir carpeta")
+
+    if userChoice is "Abrir carpeta" then
+        do shell script "/usr/bin/open " & quoted form of destinationPath
+    end if
+end run
+APPLESCRIPT
+    else
+        /usr/bin/osascript - "$DESTINATION" "$WAV_TOTAL" "$PDF_STATUS" "$PDF_ERROR_MSG" <<'APPLESCRIPT'
+on run argv
+    set destinationPath to item 1 of argv
+    set wavTotal to item 2 of argv
+    set pdfStatus to item 3 of argv
+    set pdfError to item 4 of argv
+
+    set finalMessage to "Análisis finalizado" & return & return & ¬
+        wavTotal & " WAV analizados" & return & return & ¬
+        "No se requirieron conversiones automáticas." & return & ¬
+        "Los informes quedaron en la carpeta original."
+
+    if pdfStatus is "ERROR" then
+        set finalMessage to finalMessage & return & return & ¬
+            "No se pudieron generar o publicar los PDF." & return & ¬
+            "Se conservaron los informes básico y detallado en TXT." & return & ¬
+            "Error: " & pdfError
+    end if
+
+    set userChoice to button returned of (display dialog finalMessage ¬
+        with title "Analizador de Multitracks Estudio PG V2.12.19" ¬
+        buttons {"Cerrar", "Abrir carpeta"} ¬
+        default button "Abrir carpeta")
+
+    if userChoice is "Abrir carpeta" then
+        do shell script "/usr/bin/open " & quoted form of destinationPath
+    end if
+end run
+APPLESCRIPT
+    fi
+elif [ "$RC" -ne 130 ]; then
+    /usr/bin/osascript <<'APPLESCRIPT'
+display alert "Analizador de Multitracks Estudio PG V2.12.19" message "El proceso se interrumpió. Revisá INFORME_ANALISIS_DETALLADO.txt y volvé a intentarlo." as critical
+APPLESCRIPT
+fi
+
+rm -f "$READY_FILE" "$CLOSED_FILE"
+exit "$RC"
