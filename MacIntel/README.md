@@ -14,6 +14,10 @@ FFmpeg y FFprobe se mantienen dentro del ZIP de distribución, pero sus binarios
 
 `GeneradorPDFMacIntel` se conserva sin cambios como dependencia x86_64 porque no se dispone de su código fuente. La fuente de las guías se reconstruyó desde los PDFs aprobados V2.12.18, con cambios mínimos de versión y precisión para V2.12.19.
 
+## Compatibilidad
+
+La aplicación requiere macOS 11.0 o posterior en una Mac Intel x86_64. El generador PDF incluido declara macOS 11.0; macOS 10.15 Catalina no es compatible con esta versión.
+
 ## Empaquetado
 
 En un entorno con Python 3, usar el ZIP de referencia como entrada explícita:

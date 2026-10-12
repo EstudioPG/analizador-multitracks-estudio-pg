@@ -19,7 +19,7 @@
 	<key>CFBundleVersion</key>
 	<string>2.12.19</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.15</string>
+	<string>11.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>

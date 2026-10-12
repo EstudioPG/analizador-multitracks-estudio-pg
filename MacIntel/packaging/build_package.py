@@ -15,6 +15,8 @@ import zipfile
 from pathlib import Path
 
 VERSION='2.12.19'
+MINIMUM_MACOS=(11,0,0)
+MINIMUM_MACOS_TEXT='11.0'
 TEMP_OUTPUT=None
 BASE_SHA256='ee7f04167ef2bec5bd2eea15db23d16e109abe133ab32b7c79e2a33774286acf'
 EXPECTED={
@@ -68,6 +70,35 @@ def has_x86_64_macho(data):
             if struct.unpack('>I',data[off:off+4])[0]==0x01000007: return True
     return False
 
+def x86_64_macho_slice(data):
+    if data[:4] in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf'):
+        endian='<' if data[:4]==b'\xcf\xfa\xed\xfe' else '>'
+        if struct.unpack_from(endian+'I',data,4)[0]==0x01000007: return data
+        raise ValueError('Thin Mach-O does not contain x86_64')
+    if data[:4] in (b'\xca\xfe\xba\xbe', b'\xca\xfe\xba\xbf'):
+        is64=data[:4]==b'\xca\xfe\xba\xbf'; n=struct.unpack_from('>I',data,4)[0]; width=32 if is64 else 20
+        for i in range(n):
+            off=8+i*width; cpu=struct.unpack_from('>I',data,off)[0]
+            if cpu==0x01000007:
+                if is64: start,size=struct.unpack_from('>QQ',data,off+8)
+                else: start,size=struct.unpack_from('>II',data,off+8)
+                return data[start:start+size]
+    raise ValueError('No x86_64 Mach-O slice found')
+
+def macho_minimum_macos(data):
+    data=x86_64_macho_slice(data); endian='<' if data[:4]==b'\xcf\xfa\xed\xfe' else '>'
+    ncmds=struct.unpack_from(endian+'I',data,16)[0]; off=32
+    for _ in range(ncmds):
+        cmd,size=struct.unpack_from(endian+'II',data,off)
+        if cmd==0x32:
+            _,_,platform,minos,_,_=struct.unpack_from(endian+'6I',data,off)
+            if platform==1: return (minos>>16,(minos>>8)&255,minos&255)
+        elif cmd==0x24:
+            _,_,version,_=struct.unpack_from(endian+'4I',data,off)
+            return (version>>16,(version>>8)&255,version&255)
+        off+=size
+    raise ValueError('No macOS minimum-version load command found')
+
 def release_name(old_name):
     name=old_name.replace(OLD_ROOT,NEW_ROOT,1)
     old_app_leaf='Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel).app/'
@@ -99,6 +130,14 @@ def verify_base(base):
             with z.open(entry) as f: actual=sha256_stream(f)
             if actual!=expected: raise ValueError(f'Reference guide SHA-256 mismatch: {name}')
         if info.get('CFBundleShortVersionString')!='2.12.18': raise ValueError('The input app is not V2.12.18')
+        minimums={}
+        for name in ('GeneradorPDFMacIntel','ffmpeg','ffprobe'):
+            entry=zip_member_by_name(z,OLD_APP+f'Contents/Resources/{name}')
+            data=z.read(entry)
+            if not has_x86_64_macho(data): raise ValueError(f'{name} is not x86_64 Mach-O')
+            minimums[name]=macho_minimum_macos(data)
+        if minimums['GeneradorPDFMacIntel']!=(11,0,0): raise ValueError(f'Unexpected PDF generator macOS minimum: {minimums["GeneradorPDFMacIntel"]}')
+        if any(version>MINIMUM_MACOS for version in minimums.values()): raise ValueError(f'A bundled binary requires macOS newer than {MINIMUM_MACOS_TEXT}: {minimums}')
     return digest
 
 def main():
@@ -153,7 +192,7 @@ def main():
     plist_data=(app/'Info.plist').read_bytes()
     plist=plistlib.loads(plist_data)
     if plist.get('CFBundleShortVersionString')!=VERSION or plist.get('CFBundleVersion')!=VERSION: raise ValueError('Info.plist version is not V2.12.19')
-    if plist.get('LSMinimumSystemVersion')!='10.15': raise ValueError('Minimum macOS version changed unexpectedly')
+    if plist.get('LSMinimumSystemVersion')!=MINIMUM_MACOS_TEXT: raise ValueError('Info.plist minimum macOS version must be 11.0')
 
     # Build a machine-readable component manifest from the exact package inputs.
     base_sha=verify_base(base)
@@ -170,7 +209,7 @@ def main():
       'application':'Analizador de Multitracks Estudio PG',
       'version':VERSION,
       'platform':'macOS Intel x86_64',
-      'minimum_macos':'10.15',
+      'minimum_macos':MINIMUM_MACOS_TEXT,
       'base_package':{'filename':'Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel).zip','sha256':base_sha},
       'pdf_generator_source':'not available; pinned compiled x86_64 binary',
       'components':components,
@@ -219,6 +258,9 @@ def main():
             entry=zip_member_by_name(z,name)
             with z.open(entry) as f: data=f.read(16*1024*1024)
             if not has_x86_64_macho(data): raise ValueError(f'Not a recognized x86_64 Mach-O binary: {name}')
+            minimum=macho_minimum_macos(data)
+            if minimum>MINIMUM_MACOS: raise ValueError(f'{name} requires macOS {minimum}, newer than declared {MINIMUM_MACOS_TEXT}')
+            if name=='GeneradorPDFMacIntel' and minimum!=(11,0,0): raise ValueError(f'Unexpected PDF generator macOS minimum: {minimum}')
         for name in (NEW_APP+'Contents/MacOS/AnalizadorMultitracks',NEW_APP+'Contents/Resources/AnalizadorMultitracksV2.command',helper_name,NEW_APP+'Contents/Resources/ffmpeg',NEW_APP+'Contents/Resources/ffprobe'):
             entry=zip_member_by_name(z,name)
             mode=(entry.external_attr>>16)&0o777
