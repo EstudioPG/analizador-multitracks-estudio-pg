@@ -1,5 +1,7 @@
 # Analizador de Multitracks Estudio PG V2.12.19 - Mac Intel
 
+**Compatibilidad:** requiere macOS 11.0 o posterior en una Mac Intel. No es compatible con macOS 10.15 Catalina.
+
 ## CÓMO ABRIR
 
 1. Abrí “Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel).app”.

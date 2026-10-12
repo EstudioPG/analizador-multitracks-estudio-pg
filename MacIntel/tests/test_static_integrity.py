@@ -11,6 +11,8 @@ from pathlib import Path
 import pdfplumber
 
 ROOT=Path(__file__).resolve().parents[1]
+MINIMUM_MACOS='11.0'
+MINIMUM_MACOS_VERSION=(11,0,0)
 BASE_SHA='ee7f04167ef2bec5bd2eea15db23d16e109abe133ab32b7c79e2a33774286acf'
 OLD_ROOT='Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel)/'
 OLD_APP=OLD_ROOT+'Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel).app/'
@@ -69,6 +71,35 @@ def has_x86_64(data):
         return any(struct.unpack('>I',data[8+i*width:12+i*width])[0]==0x01000007 for i in range(n))
     return False
 
+def x86_64_macho_slice(data):
+    if data[:4] in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf'):
+        endian='<' if data[:4]==b'\xcf\xfa\xed\xfe' else '>'
+        if struct.unpack_from(endian+'I',data,4)[0]==0x01000007: return data
+        raise ValueError('Thin Mach-O does not contain x86_64')
+    if data[:4] in (b'\xca\xfe\xba\xbe', b'\xca\xfe\xba\xbf'):
+        is64=data[:4]==b'\xca\xfe\xba\xbf'; n=struct.unpack_from('>I',data,4)[0]; width=32 if is64 else 20
+        for i in range(n):
+            off=8+i*width; cpu=struct.unpack_from('>I',data,off)[0]
+            if cpu==0x01000007:
+                if is64: start,size=struct.unpack_from('>QQ',data,off+8)
+                else: start,size=struct.unpack_from('>II',data,off+8)
+                return data[start:start+size]
+    raise ValueError('No x86_64 Mach-O slice found')
+
+def macho_minimum_macos(data):
+    data=x86_64_macho_slice(data); endian='<' if data[:4]==b'\xcf\xfa\xed\xfe' else '>'
+    ncmds=struct.unpack_from(endian+'I',data,16)[0]; off=32
+    for _ in range(ncmds):
+        cmd,size=struct.unpack_from(endian+'II',data,off)
+        if cmd==0x32:
+            _,_,platform,minos,_,_=struct.unpack_from(endian+'6I',data,off)
+            if platform==1: return (minos>>16,(minos>>8)&255,minos&255)
+        elif cmd==0x24:
+            _,_,version,_=struct.unpack_from(endian+'4I',data,off)
+            return (version>>16,(version>>8)&255,version&255)
+        off+=size
+    raise ValueError('No macOS minimum-version load command found')
+
 def verify_source(base):
     assert sha_file(base)==BASE_SHA,'base ZIP hash mismatch'
     with zipfile.ZipFile(base) as z:
@@ -81,6 +112,12 @@ def verify_source(base):
         assert sha(member(z,OLD_APP+'Contents/MacOS/AnalizadorMultitracks'))==EXPECTED_LAUNCHER,'base launcher hash differs'
         assert sha(member(z,OLD_APP+'Contents/Resources/Progress.applescript'))=='0f448b3d27fee8e7a995fde6a1d07b0bd837f12c470127e9e386880ccffe92ab','base progress script hash differs'
         for guide,expected in EXPECTED_GUIDES.items(): assert sha(member(z,OLD_ROOT+guide))==expected,f'base guide hash differs: {guide}'
+        for name in ('GeneradorPDFMacIntel','ffmpeg','ffprobe'):
+            data=member(z,OLD_APP+'Contents/Resources/'+name)
+            assert has_x86_64(data),f'{name} is not x86_64 Mach-O'
+            minimum=macho_minimum_macos(data)
+            assert minimum<=MINIMUM_MACOS_VERSION,(name,minimum)
+            if name=='GeneradorPDFMacIntel': assert minimum==(11,0,0),minimum
         for name,expected in EXPECTED.items():
             baseline=member(z,OLD_APP+'Contents/Resources/'+name)
             assert sha(baseline)==expected,f'{name} hash in the base ZIP differs from the recorded baseline'
@@ -94,6 +131,8 @@ def verify_source(base):
         assert len(re.findall(r'^DUPLICATE_ANALYSIS_ENABLED=',current,re.M))==1,'duplicate flag has another assignment'
         basic=current.split('# -------------------- INFORME BÁSICO -------------------------',1)[1].split('# ------------------- INFORME DETALLADO -----------------------',1)[0]
         detail=current.split('# ------------------- INFORME DETALLADO -----------------------',1)[1].split('PROFILE_REPORT_T1=$(now_ms)',1)[0]
+        detail_header=detail.split('INFORME DETALLADO',1)[0]
+        assert 'V2.12.19 (Mac Intel)' in detail_header,'detailed report version header is not V2.12.19'
         for label,report in [('basic',basic),('detail',detail)]:
             assert not re.search(r'duplicad|fingerprint|hash',report,re.I),f'user {label} report mentions disabled duplicate analysis'
         assert 'RESUMEN OPERATIVO' not in basic,'redundant basic summary returned'
@@ -109,8 +148,9 @@ def verify_source(base):
         assert progress==expected_progress,'progress behavior changed beyond version labels'
         plist=(ROOT/'app'/'Contents'/'Info.plist').read_text(encoding='utf-8')
         expected_plist=old_plist.replace('Analizador de Multitracks Estudio PG V2.12.18 (Mac Intel)','Analizador de Multitracks Estudio PG V2.12.19 (Mac Intel)').replace('<string>2.12.18</string>','<string>2.12.19</string>')
-        assert plist==expected_plist,'Info.plist changed beyond the release version'
-        assert plistlib.loads(plist.encode())['LSMinimumSystemVersion']=='10.15'
+        expected_plist=expected_plist.replace('<string>10.15</string>','<string>11.0</string>')
+        assert plist==expected_plist,'Info.plist changed beyond the release version and macOS minimum'
+        assert plistlib.loads(plist.encode())['LSMinimumSystemVersion']==MINIMUM_MACOS
         for name in ('GeneradorPDFMacIntel',):
             assert has_x86_64(member(z,OLD_APP+'Contents/Resources/'+name)),f'{name} is not x86_64 Mach-O'
         for name in ('ffmpeg','ffprobe'):
@@ -130,6 +170,8 @@ def verify_pdfs():
                 assert abs(page.width-595.276)<1 and abs(page.height-841.89)<1,(path,page.width,page.height)
             text='\n'.join(page.extract_text() or '' for page in pdf.pages)
             assert 'V2.12.19' in text
+            if path.name=='01 Cómo abrir.pdf':
+                assert 'macOS 11.0' in text and '10.15 Catalina' in text
             assert 'FFmpeg' in text or 'PDF' in text
             assert '\ufffd' not in text,'replacement character in generated PDF'
             assert not any(c in text for c in ('\u2011','\u2013','\u2014')),'unsupported non-ASCII dash in PDF text'
@@ -147,19 +189,23 @@ def verify_package(package,base):
         for name in ('GeneradorPDFMacIntel','ffmpeg','ffprobe'):
             data=member(z,NEW_APP+'Contents/Resources/'+name)
             assert has_x86_64(data[:128]),f'{name} is not x86_64'
+            assert macho_minimum_macos(data)<=MINIMUM_MACOS_VERSION,(name,macho_minimum_macos(data))
+            if name=='GeneradorPDFMacIntel': assert macho_minimum_macos(data)==(11,0,0)
             assert sha(data)==EXPECTED[name],f'{name} changed in final package'
         for name in ('EffectiveDepth.pl','DejaVuSans.ttf','DejaVuSans-Bold.ttf','AppIcon.icns','LICENCIA_FUENTE_DEJAVU.txt'):
             assert sha(member(z,NEW_APP+'Contents/Resources/'+name))==EXPECTED[name],f'{name} changed in final package'
         plist=plistlib.loads(member(z,NEW_APP+'Contents/Info.plist'))
         assert plist['CFBundleShortVersionString']=='2.12.19' and plist['CFBundleVersion']=='2.12.19'
-        assert plist['LSMinimumSystemVersion']=='10.15'
+        assert plist['LSMinimumSystemVersion']==MINIMUM_MACOS
         assert member(z,NEW_APP+'Contents/Resources/GeneradorPDFMacIntel')==member(original,OLD_APP+'Contents/Resources/GeneradorPDFMacIntel')
         manifest=json.loads(member(z,NEW_ROOT+'MANIFEST.json'))
         assert manifest['version']=='2.12.19' and manifest['platform']=='macOS Intel x86_64'
+        assert manifest['minimum_macos']==MINIMUM_MACOS
         for rel,digest in manifest['components'].items():
             assert sha(member(z,NEW_ROOT+rel))==digest,f'manifest hash mismatch: {rel}'
         names=[canonical(i) for i in z.infolist()]
         assert not any(name.startswith(OLD_ROOT) for name in names),'V2.12.18 paths leaked into the V2.12.19 package'
+        assert not any(re.search(r'(^|/)[^/]+\.(exe|vbs|ps1)$',name,re.I) for name in names),'Windows executable/script leaked into Mac package'
     print('PASS: final ZIP integrity, paths, executable modes, version, dependency hashes, and Intel architecture')
 
 def main():

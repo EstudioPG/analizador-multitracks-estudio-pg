@@ -2445,7 +2445,7 @@ REPORT_DETAIL="$WORK_DIR/INFORME_ANALISIS_DETALLADO.txt"
 # ------------------- INFORME DETALLADO -----------------------
 {
     echo "============================================================"
-    echo "ANALIZADOR DE MULTITRACKS ESTUDIO PG — V2.12.18 (Mac Intel)"
+    echo "ANALIZADOR DE MULTITRACKS ESTUDIO PG — V2.12.19 (Mac Intel)"
     echo "INFORME DETALLADO"
     echo "============================================================"
     echo

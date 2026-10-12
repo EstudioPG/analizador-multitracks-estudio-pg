@@ -12,12 +12,19 @@ Fecha: 2026-10-11. Entorno disponible: Windows; no hay un Mac Intel en esta sesi
 - Las guías PDF se verificaron con Poppler: A4, una página para “Cómo abrir” y dos para “Qué hace y cómo trabaja”. Rendericé y revisé visualmente todas las páginas; no observé recortes ni caracteres sustituidos.
 - `build_package.py` creó el paquete autónomo y pasó `ZipFile.testzip`, los hashes del manifiesto, la versión del bundle, los permisos de ejecución y la identificación Mach-O x86_64 para `GeneradorPDFMacIntel`, `ffmpeg` y `ffprobe`.
 
+## Correcciones posteriores a la auditoría
+
+- Corregido el encabezado del informe detallado a V2.12.19; la prueba estática lo comprueba explícitamente.
+- Confirmado por metadatos Mach-O que `GeneradorPDFMacIntel` requiere macOS 11.0.0; FFmpeg y FFprobe requieren 10.13.0. El mínimo de la aplicación, la guía, el manifiesto y el empaquetador quedó en macOS 11.0.
+- Reconstruido el ZIP autónomo desde el paquete base V2.12.18 verificado. Tamaño: 55.451.330 bytes. SHA-256: `3c446a59a84a57dd90f41d9344d35f31e907abbde8651cdeee0f7892ec7d66a5`.
+- Tras la corrección, pasaron `tests/test_static_integrity.py`, la validación de sintaxis shell y los cuatro casos de publicación/rollback.
+
 ## Pendiente por falta de macOS Intel
 
 - Abrir la aplicación, compilar `Progress.applescript` con `osacompile` y probar la interfaz de progreso.
 - Ejecutar el generador PDF Mach-O con informes reales de prueba y confirmar su comportamiento al recibir una carpeta temporal como destino.
 - Generar los dos PDF de análisis con datos sintéticos y revisar sus nombres, texto y paginación.
-- Ejecutar la prueba de extremo a extremo de la aplicación y confirmar su funcionamiento en macOS 10.15 o posterior.
+- Ejecutar la prueba de extremo a extremo de la aplicación en una Mac Intel con macOS 11.0 o posterior. La ejecución real aún no está validada.
 - No se ejecutó `perl -c` porque Perl no está disponible en este Windows. `EffectiveDepth.pl` quedó byte por byte igual que en el ZIP base.
 
 No se abrieron sesiones originales ni se leyeron, copiaron o modificaron WAV de sesiones. El test del publicador usa únicamente archivos temporales de texto y PDFs simulados. Las pruebas de PDFs de análisis reales quedan pendientes; no se consideran aprobadas por el test simulado.
